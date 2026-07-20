@@ -1,0 +1,19 @@
+{
+  "name": "davidbeasts2d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "大衛打獅與熊 — 聖經互動遊戲 · 撒母耳記上 17(兩波野獸 boss 戰)",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/bundle-static.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "serve:dist": "node scripts/serve-static.mjs",
+    "test": "node scripts/smoke-test.mjs",
+    "test:offline": "node scripts/smoke-test.mjs --offline"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5",
+    "vite": "^6.0.7"
+  }
+}

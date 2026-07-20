@@ -1,0 +1,144 @@
+============================================================
+參孫打獅子 — 交接說明(讀我-HANDOFF.txt)
+更新:2026-06-17  ·  給「另一台 PC / 另一個 AI」接手用
+============================================================
+
+這是什麼
+--------
+單一動作關的聖經小遊戲:參孫打獅子(士師記 14:5-6)。
+純 vanilla ES modules + Canvas,零執行期相依、Web Audio 合成音效、可離線(PWA)。
+架構沿用「約拿闖關」引擎。俯視角競技場 boss 戰:走位閃避 + 趁破綻反擊,6 下撕裂收尾。
+
+★ 神學重點:聖經不說參孫多強壯,而說「耶和華的靈大大感動他」——力量出於神。
+  不要把它改成「比力氣 / 練等變強」;不要加倚靠值能量條(使用者已明確決定不做)。
+
+
+現在到哪了(已完成、已上線)
+----------------------------
+[完成] 核心關卡完整可玩;npm test / npm run test:offline 全綠。
+[上線] 遊戲本體:https://hfpc-samson-game.netlify.app  (資產 200 驗證過)
+[上線] GitHub:  https://github.com/summer09201017-cloud/hfpc-samson-game  (public, 分支 main)
+[進行] 大廳:    收進「聖經遊戲大廳 hfpc-bible-games」的『⚔️ 戰爭闖關合輯』第 6 關。
+                卡片已點亮,但改動在功能分支 feat/jehoshaphat-to-paul,已開 PR #6
+                (https://github.com/summer09201017-cloud/hfpc-bible-games/pull/6)。
+                ⚠ 要 merge 進 main,Netlify 才會部署正式大廳、卡片才在線上亮。
+
+最近一次改動(2026-06-17):
+  - telegraph 期間紅線「持續追蹤玩家」,撲出前 0.2 秒(LION.aimLockLead)鎖定方向、
+    紅線由虛線轉亮實線當公平閃避訊號。改了 lion.js / config.js / renderer.js。
+  - 修正文件:之前 CLAUDE.md/README 還寫舊的「對峙固定站位+翻滾 i-frames」,實作
+    其實是「俯視角走位、沒有翻滾」。已全部對齊。改玩法務必同步改文件(見 CLAUDE.md 鐵則)。
+
+
+怎麼跑 / 測 / 建置(在這個資料夾)
+---------------------------------
+  npm install            第一次(裝 vite + sharp)
+  npm run dev            開發,預設 http://localhost:5273/
+  npm test               煙霧測試:文案 + 語法 + 狀態機/嵌入契約
+  npm run test:offline   再加 build → PWA 離線就緒檢查
+  npm run build          產生 site/(自寫 bundle,避開 Node 24 的 vite build 地雷)
+
+本機地雷(務必遵守,詳見 CLAUDE.md):
+  - 不要用 vite build(這台 Node 24 遞迴 cpSync 會無聲被殺);build 走 scripts/bundle-static.mjs。
+  - .bat 一律純 ASCII + CRLF。
+  - localhost 會自動 unregister Service Worker(改了才看得到);正式環境才註冊。
+  - 新增 src/ 模組要加進 public/sw.js 的 CORE 清單(test:offline 會檢查)。
+
+
+檔案在哪(一檔一責)
+--------------------
+  src/game.js       主迴圈 + 狀態機 + 戰鬥裁判 + 嵌入契約
+  src/config.js   ★ 所有可調數值(調手感只動這裡:PHASES / maxHp / maxHearts / aimLockLead)
+  src/scripture.js★ 經文與文案(和合本;改文案只動這裡)
+  src/samson.js     參孫走位 + 反擊判定窗
+  src/lion.js       獅子 AI 狀態機(含 _aimAt 紅線追蹤)
+  src/renderer.js   所有 Canvas 繪製(只讀狀態)
+  src/input.js      原始輸入(移動向量 + 攻擊邊緣 + 觸控)
+  src/ui.js         DOM 覆蓋層(標題/勝利/失敗/暫停/彩蛋)
+  src/audio.js      Web Audio 即時合成音效 + 背景音樂
+  CLAUDE.md         開發筆記(含「現況」「玩法核心」「本機地雷」)
+  roadmap.md        ★ 下一步要做什麼(已完成 vs 待做,按 CP 值排序)
+  讀我-HANDOFF.txt  本檔
+
+
+本輪(2026-06-20)又新加的玩法:💛金色的心(突破血量上限)、⏳死亡回歸(前三次死亡
+  獅血倒退回 30 秒前)、💥打擊感(頓幀/震動/爆擊/手機震動)、🎵原創背景音樂。
+  (全部已 commit/push;細節見 CLAUDE.md「玩法核心」與 roadmap「已完成」。)
+
+下一步做什麼
+------------
+打開 roadmap.md(已重整成「已完成 vs 待做」、按 CP 值排序)。一句話:核心已完整可上課。
+★ 唯一較急:堆了很多硬機制(30 血+3 心+爪擊+捕獸夾+地獄+死亡回歸),對小小孩偏難
+  → 第 1 優先做「難度選單(易/中/難)」把兒童友善救回來。其餘都是加值。
+建議的「快贏」(高 CP 值、半天內):
+  1. 難度選單(易/中/難)→ 對應一組 config 值。★最該做(做完抽 skill game-difficulty-presets)。
+  2. 過關星級評價(1–3★,依剩餘心數+combo)。
+  3. 勝利經文語音朗讀:skill web-speech-scripture 已存在,直接接上即可。
+  4. 難度平衡校正:用 agent difficulty-balancer 跑 headless 自我對戰,或實玩一輪調 config。
+
+工具現況(隨 skill 合輯 hfpc-claude-skills 一起裝,見下方;repo 已達 48 skill/6 指令/4 agent):
+  /ship-check /sync-skills /handoff   上線體檢 / 同步 skill / 交接一條龍
+  bible-game-reviewer / qa-playtester / difficulty-balancer   審關卡 / 跑測試 / 校難度(agent)
+  doc-sync hook(本 repo) + pre-push-guard(hook,push 前自動測試)
+  本 repo src/main.js 有 localhost 偵錯掛點 window.__game(配 skill canvas-playwright-verify 截圖驗收)
+
+MCP(★已做好):「和合本經文查詢 cuv MCP」已可用——server 在 skill cuv-scripture-mcp,
+  資料在 ~/.claude/cuv-data(9 版本,unv 和合本等)。寫 scripture.js 經文前可 lookup(書,章,節)
+  取正確原文比對,杜絕經文寫錯。agape250 這台若沒接,在該機跑:
+    claude mcp add cuv --scope user -e CUV_DATA_DIR=<該機cuv-data路徑> -- node <該機skill>/cuv-scripture-mcp/server/cuv-mcp.mjs
+  (★ MCP 一律 --scope user 才跨專案;別漏。詳見記憶 mcp-scope-lesson。)
+
+
+跨專案 Skills:一鍵裝齊全部(★ 換機必看)
+------------------------------------------
+Skill 真正生效在「使用者層」~/.claude/skills/,是機器本地、不會跟著任何 repo 走。
+所有自製 skill(目前 30 個:遊戲引擎、闖關設計、卡片關、各式機制、神學、驗證/部署、
+本遊戲新做的 蜂窩石頭/神蹟狂暴/地獄壞結局/向量美術 等)已打包成一個私有 repo,
+換 PC / agape250 那台可「一鍵裝齊」:
+
+  Skill 合輯 repo(私有):
+    https://github.com/summer09201017-cloud/hfpc-claude-skills
+
+  方式 B(推薦,Claude 原生、可更新):在 Claude Code 裡輸入
+    /plugin marketplace add summer09201017-cloud/hfpc-claude-skills
+    /plugin install hfpc-bible-game-skills@hfpc-skills
+    之後更新:/plugin marketplace update hfpc-skills
+
+  方式 A(零門檻,雙擊即裝):
+    git clone https://github.com/summer09201017-cloud/hfpc-claude-skills.git
+    然後雙擊 install.bat(Windows)或 bash install.sh(Mac/Linux/Git Bash)
+    → 自動複製進 ~/.claude/skills/,重開 Claude 即可。
+
+  ※ 私有 repo:新機要先 gh auth login(或用 GitHub 帳號登入)才能 clone/裝市集。
+  ※ 新增/改 skill 的流程:在來源機 ~/.claude/skills 編好 → 同步進該 repo 的
+     plugins/hfpc-skills/skills/ → git push;其他機 /plugin marketplace update
+     或 git pull 後重跑 install。
+
+  ※ MCP 不會跟著 skill 合輯走(那是另一套設定)。agape250 這台要補裝 playwright
+     (關卡截圖驗收用),在那台跑一次:
+        claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest
+     ★ 一定要 --scope user(跨所有專案);不加會只綁當下目錄那個專案。
+     驗證:在任一遊戲 repo 目錄跑 claude mcp list,看 playwright 有沒有列出。
+     (github / memory / context7 同理,缺哪個就 --scope user 補哪個。)
+
+本遊戲特別相關的 skill:
+  ship-game-online      單機遊戲一條龍上架(git→GitHub→Netlify→驗證→點亮卡)
+  add-to-collection     把一關加進大廳合輯卡片
+  arcade-game-kit       零相依 Canvas 闖關引擎(本遊戲的底)
+  arena-pickups-hazards / boss-escalation / corruption-bad-ending /
+  canvas-vector-characters  ← 本遊戲這幾輪做出來的機制與美術,已抽成可重用 skill
+
+(備援:repo 內 handoff/skills/ 還留著 add-to-collection、ship-game-online 兩個副本,
+ 萬一上面的合輯 repo 連不上時可手動複製;但正常請用上面的一鍵方式。)
+
+
+關聯專案
+--------
+  約拿闖關  hfpc-jonah-game      (引擎範本,vanilla)
+  保羅大富翁 hfpc-paul-game       (嵌入式桌遊主框,React+Vite;許多動作關住這裡 ?demo=)
+  總入口大廳 hfpc-bible-games     (只帶路、不放遊戲;合輯清單在 src/data.js)
+
+============================================================
+榮耀歸神。願孩子們記得:面對比自己更大的「獅子」,
+真正的得勝不在於我們多有本事,而在於那加給我們力量的主。
+============================================================
