@@ -8,6 +8,31 @@ import { LEVEL1 } from './scripture.js'
 
 const FONT = '"Noto Sans TC","Microsoft JhengHei",sans-serif'
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   🧸 tsum 圓萌野獸(2D 版,2026-07-30;全艦隊畫風政策:**動物一律 tsum**)
+   ★ 這一站是 Canvas 2D,**tsum-3d-kit 用不上**(那包是 three.js 的球體積木)。
+     2D 的 tsum 皮走 [[candy-tsum-kit]] 的「臉 v3」標配:
+       大眼 + 眨眼(週期錯開、reduced 不眨)+ 水潤雙高光 + 深笑 + 腮紅 + 立體化(漸層球體/頂光弧)。
+   ★ 只換視覺外殼。以下**一字不動**,因為它們是「判定=畫面」的一部分:
+       · state → bodyY / headX / headY / rear 的位移表
+         (抬頭=蓄力預告、頭往前伸=正在撲、頭低下=破綻;玩家就是看這個閃)
+       · walk 週期、flash 白閃、open(破綻時眼白亮起)、死神紅眼發光
+       · 碰撞與命中一律在 config.js(LION.r=34 / contactR=56 / attackReach=96),
+         畫多大都不影響判定 —— 反而 tsum 的圓團身體**比寫實版的扁寬橢圓更貼近 r=34 的圓形碰撞範圍**。
+   ★ 輪廓線索(tsum 化最容易漏的一條):獅=兩層鬃毛球 + 尖立耳;熊=最圓最胖 + 大圓耳 + 短尾。
+     ⇒ 三個版本(真3D/2.5D/2D)刻意用同一組線索,孩子換版本也認得出是同一隻。
+   ★ 拿掉的寫實細節(它們正是「猙獰」的來源,和圓萌打架):眉骨、鬍鬚、腳趾線。
+   ★ 🔴 **獠牙改成只在死神模式出現**(原本每次蓄力/衝刺都露白獠牙)。
+     依據=beast-boss-kit「獸不可恐怖、恐怖元素只在死神那一檔」的分級鐵則;
+     張口本身**保留**(那是攻擊預告,拿掉會害玩家看不出要撲了)。
+   ★ TSUM_BEASTS=false 一鍵回寫實;寫實版 _lion 刻意保留不刪(日後接年齡分級直接用)。
+   ══════════════════════════════════════════════════════════════════════════════ */
+const TSUM_BEASTS = true
+// 尊重系統的「減少動態」設定(臉 v3 標配:reduced 就不眨眼、不 Q 彈呼吸)
+const REDUCED = (() => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false }
+})()
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas
@@ -1390,7 +1415,315 @@ export class Renderer {
 
   // ---- 野獸(俯視站立;kind='lion' 獅子 / 'bear' 熊;本地座標朝左,face>0 時翻轉朝右)----
   //   熊:去鬃毛、圓耳、短尾、肩隆、棕色、體型更壯(撒上 17:34-36 的獅與熊)。
+  /* 🧸 tsum 圓萌版的獸(見檔頭那段說明)。配色與狀態位移表全部沿用寫實版。 */
+  _lionTsum(x, footY, face, state, phase, t, flash, open, deathMode = false, kind = 'lion') {
+    const ctx = this.ctx
+    const isBear = kind === 'bear'
+    // ── 配色:與寫實版同一組(含 phase 越打越深、死神暗黑),只多兩個 tsum 專用的粉 ──
+    const BODY = deathMode ? '#2a2330'
+      : isBear ? (['#8a5a34', '#7a4d2b', '#6b4324'][phase] || '#8a5a34')
+      : (['#d09543', '#bd7d2f', '#a36526'][phase] || '#d09543')
+    const BODY_D = deathMode ? '#171320'
+      : isBear ? (['#6b4526', '#5c3a1f', '#4d3019'][phase] || '#6b4526')
+      : (['#a8702a', '#8f5a1e', '#774717'][phase] || '#a8702a')
+    const BODY_HI = deathMode ? '#3a3142'
+      : isBear ? (['#a4744a', '#946538', '#845730'][phase] || '#a4744a')
+      : (['#e8b766', '#d49a4a', '#c1853a'][phase] || '#e8b766')
+    const MANE = deathMode ? '#100c1a'
+      : isBear ? '#5c3a1f'
+      : (['#7a4a1c', '#683f17', '#542f10'][phase] || '#7a4a1c')
+    const MANE_D = deathMode ? '#070510'
+      : isBear ? '#402813'
+      : (['#5e3713', '#4e2e0f', '#3e240b'][phase] || '#5e3713')
+    const MUZZLE = deathMode ? '#3a3142' : isBear ? '#c8ad86' : '#f0d9a8'
+    // 腮紅與耳內粉:死神模式一起轉暗,否則黑獸留著粉紅臉頰=恐怖感破功(2.5D 同日踩過同一坑)
+    const BLUSH = deathMode ? 'rgba(120,60,80,0.45)' : 'rgba(224,139,134,0.9)'
+    const EAR_IN = deathMode ? '#2a1220' : '#d79a94'
+    const MOUTH_C = deathMode ? '#0a0510' : MANE_D
+
+    this._shadow(x, footY, 38)
+    ctx.save()
+    ctx.translate(x, footY)
+    if (face > 0) ctx.scale(-1, 1) // 本地朝左,需要朝右時翻轉
+
+    const walking = state === 'enter' || state === 'approach'
+    const walk = walking ? Math.sin(t * 9) : 0
+    /* ★★ 以下這張「狀態 → 位移」表與寫實版一字不差 —— 它就是攻擊預告本身 ★★
+       只有 bodyW/bodyH 改成 tsum 的圓團比例(寫實版獅 64×30 扁寬 → 56×40 圓厚)。*/
+    let bodyY = -46
+    /* 🔴 bodyH 是 0730 截圖驗收抓到的**真事故**:第一版把身體加高到 40/44 想更「圓團」,
+       結果身體底緣掉到 -6(地面是 0)= **幾乎坐在地上**,腿只剩 11px、走路完全看不出來
+       —— 正好違反我自己在檔頭寫的那條「腿看不出動作就違反判定=畫面」。
+       (tsum3d.js 的「腳只露一小截、身體幾乎坐在地上」是給**不會走路**的角色用的,這關的獸會走過來撲你。)
+       定案:靠**縮窄**而不是**加高**來變圓 —— 寬 64→52(熊 60→50)、高只微調 30→31(熊 37→34)。
+         · 扁寬比 2.13→1.68(熊 1.62→1.47)= 明顯更圓;
+         · 身體底緣 -15(熊 -12)**不比寫實版差**(寫實版 -16 / 熊 -9)⇒ 腿一樣看得見;
+         · 而且縮窄之後輪廓更貼近 config 的圓形碰撞範圍 LION.r=34。 */
+    let bodyW = isBear ? 50 : 52
+    let bodyH = isBear ? 34 : 31 // 熊更胖(輪廓線索);★要胖是把身體做胖,不是整體放大
+    let headX = -54
+    let headY = -52
+    let rear = 0
+    if (state === 'telegraph') {
+      rear = 1
+      headY = -66
+      bodyY = -50
+    } else if (state === 'charge') {
+      headX = -66
+      headY = -46
+      bodyW = isBear ? 58 : 60 // 衝刺時身體前傾拉長(+8,幅度同寫實版)
+    } else if (state === 'recovery') {
+      headY = -36
+      bodyY = -40
+    }
+    // Q 彈呼吸:只動「畫身體的半徑」,不動任何錨點(免得腿/頭跟著飄)
+    const q = REDUCED ? 1 : 1 + Math.sin(t * 2.8 + (isBear ? 1.7 : 0.4)) * 0.03
+    const bw = bodyW * q, bh = bodyH / q
+
+    // ── 尾巴:獅=一串由小到大的毛球(細線在圓身邊像牙籤);熊=短尾一小凸 ──
+    if (isBear) {
+      ctx.fillStyle = BODY_D
+      ctx.beginPath()
+      ctx.arc(bodyW * 0.86, bodyY + 8, 7, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      const tailPts = [[54, bodyY + 2, 5], [64 + walk * 3, bodyY - 12, 6], [69 + walk * 4, bodyY - 27, 7.5]]
+      tailPts.forEach(([tx, ty, tr], i) => {
+        ctx.fillStyle = i === tailPts.length - 1 ? MANE : BODY_D // 尾端毛球用鬃色=獅子的招牌
+        ctx.beginPath()
+        ctx.arc(tx, ty, tr, 0, Math.PI * 2)
+        ctx.fill()
+      })
+    }
+
+    /* ── 腿:短胖圓柱 + 球狀腳掌(不做趾線)。
+       ★ 腿的錨點(bodyY+bodyH-10 → -3)與 swing 幅度沿用寫實版:走路要看得出來
+         (這關的獸會走過來撲你,腿看不出動作就違反「判定=畫面」)。*/
+    const leg = (lx, swing, color, dark) => {
+      ctx.strokeStyle = color
+      ctx.lineWidth = 12 // 寫實版 10 → tsum 略胖(★不要更胖:15 會胖到看不出在擺動)
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(lx, bodyY + bodyH - 10)
+      ctx.lineTo(lx + swing, -3) // 落點同寫實版
+      ctx.stroke()
+      ctx.fillStyle = dark // 球狀腳掌(取代方塊腳掌+趾線)
+      ctx.beginPath()
+      ctx.arc(lx + swing + 1, -3.5, 7, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 0.86
+    leg(42, walk * 8, BODY_D, MANE_D) // 遠側腿(暗)
+    leg(-26, -walk * 8, BODY_D, MANE_D)
+    ctx.globalAlpha = 1
+
+    // ── 軀幹:圓團 + 漸層球體(立體化 v2)+ 頂光弧 + 腹部陰影 ──
+    const g = ctx.createRadialGradient(2, bodyY - bh * 0.4, bw * 0.1, 8, bodyY, bw)
+    g.addColorStop(0, BODY_HI)
+    g.addColorStop(0.55, BODY)
+    g.addColorStop(1, BODY_D)
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.ellipse(8, bodyY, bw, bh, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = BODY_HI // 頂光弧
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.ellipse(6, bodyY - bh * 0.18, bw * 0.66, bh * 0.5, 0, Math.PI * 1.18, Math.PI * 1.82)
+    ctx.stroke()
+
+    // 熊的肩隆(招牌駝峰,在前肩上方)
+    if (isBear) {
+      ctx.fillStyle = BODY_HI
+      ctx.beginPath()
+      ctx.ellipse(-18, bodyY - bh * 0.62, 24, 16, -0.18, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // 近側腿
+    leg(38, -walk * 8, BODY, BODY_D)
+    leg(-20, walk * 8, BODY, BODY_D)
+
+    /* ── 鬃毛(只有獅子):**兩層互相重疊的毛球**,不是尖刺也不是一圈甜甜圈。
+       兩層錯開半格 → 連成一團有體積的毛領(3D 版改了 5 版才定案的寫法,這裡照同一個道理做)。
+       畫在頭之前 ⇒ 鬃毛在臉後面;耳朵畫在頭之後 ⇒ 耳朵在鬃毛前面(不會被埋掉)。*/
+    if (!isBear) {
+      const mx = headX + 10
+      const my = headY + 5
+      ctx.fillStyle = MANE_D // 底盤先鋪一圈,毛球之間才不會透出背景
+      ctx.beginPath()
+      ctx.arc(mx, my, 27 + rear * 3, 0, Math.PI * 2)
+      ctx.fill()
+      const N = 11
+      for (const [rr, off, col] of [[30 + rear * 3, 0, MANE_D], [25 + rear * 2, 0.5, MANE]]) {
+        for (let i = 0; i < N; i++) {
+          const a = ((i + off) / N) * Math.PI * 2
+          ctx.fillStyle = col
+          ctx.beginPath()
+          ctx.arc(mx + Math.cos(a) * rr, my + Math.sin(a) * rr, 10, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+    }
+
+    // ===== 頭(3/4 側面朝左:前方=左)。tsum 比例:頭幾乎和身體一樣大 =====
+    const HR = isBear ? 29 : 27 // 寫實版只有 18
+    const hg = ctx.createRadialGradient(headX - HR * 0.3, headY - HR * 0.35, HR * 0.1, headX, headY, HR)
+    hg.addColorStop(0, BODY_HI)
+    hg.addColorStop(0.6, BODY)
+    hg.addColorStop(1, BODY_D)
+    ctx.fillStyle = hg
+    ctx.beginPath()
+    ctx.arc(headX, headY, HR, 0, Math.PI * 2)
+    ctx.fill()
+
+    /* 兩耳(後耳小且高、前耳大且低 → 3/4 透視)。
+       獅=尖立耳、熊=大圓耳 —— 和真 3D / 2.5D 兩版用同一組線索。*/
+    const roundEar = (ex, ey, er) => {
+      ctx.fillStyle = BODY
+      ctx.beginPath()
+      ctx.arc(ex, ey, er, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = EAR_IN
+      ctx.beginPath()
+      ctx.arc(ex, ey + er * 0.12, er * 0.48, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    const pointyEar = (ex, ey, er) => {
+      ctx.fillStyle = MANE
+      ctx.beginPath()
+      ctx.moveTo(ex - er * 0.8, ey + er * 0.7)
+      ctx.lineTo(ex + er * 0.1, ey - er * 1.25) // 尖端朝上
+      ctx.lineTo(ex + er * 0.85, ey + er * 0.7)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = EAR_IN
+      ctx.beginPath()
+      ctx.arc(ex, ey + er * 0.1, er * 0.34, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    if (isBear) {
+      roundEar(headX + 15, headY - HR * 0.74, 10) // 後耳(遠)
+      roundEar(headX - 11, headY - HR * 0.8, 11) // 前耳(近,較大)
+    } else {
+      // ★ 獅耳畫得比熊耳小是對的(獅耳本來就小),但**不能太小**:
+      //   遊戲實際尺寸只有近拍的 1/3,8px 的耳朵在螢幕上會整個消失在鬃毛裡。
+      pointyEar(headX + 15, headY - HR * 0.9, 10)
+      pointyEar(headX - 10, headY - HR * 0.98, 11.5)
+    }
+
+    // 吻部(向前下方突出的口鼻;前端=左)
+    ctx.fillStyle = MUZZLE
+    ctx.beginPath()
+    ctx.ellipse(headX - HR * 0.34, headY + HR * 0.3, HR * 0.44, HR * 0.34, -0.12, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 鼻頭:圓潤一顆(不用倒三角+人中線,那是寫實版的猙獰細節)
+    const noseX = headX - HR * 0.66
+    const noseY = headY + HR * 0.2
+    ctx.fillStyle = deathMode ? '#000' : '#3a1e12'
+    ctx.beginPath()
+    ctx.ellipse(noseX, noseY, HR * 0.15, HR * 0.12, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    const roar = state === 'telegraph' || state === 'charge'
+    if (roar) {
+      /* 張口(攻擊預告,一定要保留)。★ 白獠牙只在死神模式出現:
+         獸不可恐怖是分級鐵則,圓萌臉配白獠牙也很衝突。*/
+      ctx.fillStyle = deathMode ? '#2a0808' : '#8d3a2c'
+      ctx.beginPath()
+      ctx.ellipse(headX - HR * 0.3, headY + HR * 0.52, HR * 0.3, HR * 0.24, -0.1, 0, Math.PI * 2)
+      ctx.fill()
+      if (deathMode) {
+        ctx.fillStyle = '#fff'
+        for (const fx of [headX - HR * 0.52, headX - HR * 0.1]) {
+          ctx.beginPath()
+          ctx.moveTo(fx - 2, headY + HR * 0.36)
+          ctx.lineTo(fx + 2, headY + HR * 0.36)
+          ctx.lineTo(fx, headY + HR * 0.58)
+          ctx.closePath()
+          ctx.fill()
+        }
+      }
+    } else {
+      // 深笑:一段厚弧(臉 v3 標配),開口朝上=在笑
+      ctx.strokeStyle = MOUTH_C
+      ctx.lineWidth = 3
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.arc(headX - HR * 0.32, headY + HR * 0.34, HR * 0.26, Math.PI * 0.12, Math.PI * 0.88)
+      ctx.stroke()
+    }
+
+    /* 眼睛:tsum 的靈魂 —— 要**大到誇張**(寫實版 er 只有 2.7/2.1,這裡 0.26/0.21×HR ≈ 7/5.7)。
+       位置沿用寫實版的 3/4 透視關係(近眼大而低、遠眼小而高),死神紅眼那段才對得上。
+       ★ 眨眼:週期 4.6 秒、獅熊錯開,reduced 不眨(臉 v3)。*/
+    const eyeNear = [headX - HR * 0.3, headY - HR * 0.13, HR * 0.26]
+    const eyeFar = [headX + HR * 0.2, headY - HR * 0.2, HR * 0.21]
+    const blinkPh = (t + (isBear ? 3.1 : 0.4)) % 4.6
+    const blink = REDUCED || blinkPh > 0.16 ? 1 : Math.max(0.12, Math.abs(blinkPh - 0.08) / 0.08)
+    for (const [ex, ey, er] of [eyeFar, eyeNear]) {
+      ctx.fillStyle = open ? '#ffe9a8' : '#ffffff' // open=破綻,眼白亮起(沿用寫實版的提示)
+      ctx.beginPath()
+      ctx.ellipse(ex, ey, er, er * blink, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#241208' // 瞳孔(朝前=左)
+      ctx.beginPath()
+      ctx.ellipse(ex - er * 0.26, ey, er * 0.62, er * 0.62 * blink, 0, 0, Math.PI * 2)
+      ctx.fill()
+      if (blink > 0.6) { // 水潤雙高光(眨到一半就別畫,免得浮在眼皮上)
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.arc(ex - er * 0.5, ey - er * 0.38, er * 0.26, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(ex + er * 0.22, ey + er * 0.34, er * 0.14, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    // 腮紅:可愛度大半來自這個(在近眼下方偏後)
+    ctx.fillStyle = BLUSH
+    ctx.beginPath()
+    ctx.ellipse(headX - HR * 0.02, headY + HR * 0.2, HR * 0.2, HR * 0.13, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    if (flash > 0) {
+      ctx.globalAlpha = Math.min(0.6, flash * 2)
+      ctx.fillStyle = '#fff'
+      ctx.beginPath()
+      ctx.ellipse(8, bodyY, bodyW + 22, bodyH + 22, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 1
+    }
+
+    // 死神模式:發光紅眼(對齊 3/4 透視的眼睛位置;沿用寫實版同一段)
+    if (deathMode) {
+      const glow = 0.6 + 0.4 * Math.abs(Math.sin(t * 5))
+      const eyes = [eyeNear, eyeFar]
+      ctx.fillStyle = `rgba(255,90,90,${0.5 * glow})` // 眼睛外暈
+      for (const [ex, ey, er] of eyes) {
+        ctx.beginPath()
+        ctx.arc(ex, ey, er + 3.5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.fillStyle = `rgba(255,30,30,${glow})`
+      for (const [ex, ey, er] of eyes) {
+        ctx.beginPath()
+        ctx.arc(ex, ey, er * 0.62, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    ctx.restore()
+  }
+
   _lion(x, footY, face, state, phase, t, flash, open, deathMode = false, kind = 'lion') {
+    /* 🧸 動物一律 tsum(0730 使用者拍板的全艦隊畫風政策)。
+       TSUM_BEASTS=false 就整個回到下面這隻寫實野獸——寫實版**刻意保留不刪**,
+       日後要接「年齡分級」(幼兒/兒童=圓萌、青少年=寫實)時就是現成的。 */
+    if (TSUM_BEASTS) return this._lionTsum(x, footY, face, state, phase, t, flash, open, deathMode, kind)
     const ctx = this.ctx
     const isBear = kind === 'bear'
     // 死神模式:暗黑死神配色;否則獅子=金褐、熊=棕色(依 phase 略深)

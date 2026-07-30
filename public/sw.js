@@ -3,7 +3,8 @@
 // 順手更新快取;離線時才退回快取。這樣改版不會被舊快取黏住。
 // 改版時把 CACHE 版本號 +1,舊快取會在啟用時自動清除。
 
-const CACHE = 'davidbeasts2d-nf1'
+// nf2(2026-07-30):🧸 獅/熊改成 tsum 圓萌造型(全艦隊政策「動物一律 tsum」;真 3D/2.5D 兩版同日先行)
+const CACHE = 'davidbeasts2d-nf2'
 // 預快取「整個 app shell」(HTML + CSS + 全部 ES 模組 + 圖示),安裝後馬上離線也能玩。
 // ⚠ 新增 src/ 模組時,記得把它加進這份清單(npm run test:offline 會檢查)。
 const CORE = [
